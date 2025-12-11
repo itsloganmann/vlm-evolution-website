@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initTableRowHighlight();
     initSmoothScroll();
     initTypingEffect();
+    initLLaVADemo();
 });
 
 /* ==========================================
@@ -443,5 +444,312 @@ tooltip.style.cssText = `
 `;
 document.body.appendChild(tooltip);
 
+/* ==========================================
+   LLaVA Interactive Demo
+   ========================================== */
+function initLLaVADemo() {
+    const pipelineLayers = document.querySelectorAll('.pipeline-layer');
+    const detailPanel = document.getElementById('layerDetailPanel');
+    
+    if (!pipelineLayers.length) return;
+    
+    // Layer information database
+    const layerInfo = {
+        'vision-encoder': {
+            title: 'CLIP Vision Encoder (ViT-L/14)',
+            description: `
+                <p>The Vision Encoder is a <strong>Vision Transformer (ViT)</strong> pre-trained by OpenAI as part of CLIP. In LLaVA, this encoder is kept <em>frozen</em> during training.</p>
+                <h5>How It Works:</h5>
+                <ol>
+                    <li><strong>Patch Embedding:</strong> The input image (224×224 pixels) is divided into 14×14 patches, each 16×16 pixels.</li>
+                    <li><strong>Linear Projection:</strong> Each patch is flattened and projected to a 1024-dimensional vector.</li>
+                    <li><strong>Positional Encoding:</strong> Learned position embeddings are added to preserve spatial information.</li>
+                    <li><strong>Transformer Layers:</strong> 24 transformer blocks process the patch sequence with self-attention.</li>
+                </ol>
+                <div class="info-stats">
+                    <div class="info-stat"><span class="stat-val">196</span><span class="stat-desc">Patches per image</span></div>
+                    <div class="info-stat"><span class="stat-val">1024</span><span class="stat-desc">Dimensions per patch</span></div>
+                    <div class="info-stat"><span class="stat-val">~300M</span><span class="stat-desc">Parameters</span></div>
+                </div>
+            `,
+            color: '#6366f1'
+        },
+        'projection': {
+            title: 'Linear Projection Layer',
+            description: `
+                <p>This is LLaVA's <strong>key architectural innovation</strong>—a simple linear projection that bridges vision and language spaces.</p>
+                <h5>Why It Matters:</h5>
+                <p>Unlike complex fusion mechanisms in Flamingo (Perceiver Resampler + Gated Cross-Attention), LLaVA uses just a single trainable matrix multiplication:</p>
+                <div class="formula-box">
+                    <code>H<sub>v</sub> = W · Z<sub>v</sub></code>
+                    <p>Where W is a learnable [1024 × 4096] matrix</p>
+                </div>
+                <p>This simplicity allows for:</p>
+                <ul>
+                    <li>Faster training convergence</li>
+                    <li>Lower computational cost</li>
+                    <li>Easier reproducibility</li>
+                </ul>
+                <div class="info-stats">
+                    <div class="info-stat"><span class="stat-val">~4M</span><span class="stat-desc">Trainable params</span></div>
+                    <div class="info-stat"><span class="stat-val">1024→4096</span><span class="stat-desc">Dimension mapping</span></div>
+                </div>
+            `,
+            color: '#ec4899'
+        },
+        'concatenation': {
+            title: 'Token Concatenation',
+            description: `
+                <p>The projected visual tokens are <strong>concatenated</strong> with the text tokens to form a unified input sequence for the language model.</p>
+                <h5>Sequence Structure:</h5>
+                <div class="sequence-diagram">
+                    <div class="seq-part visual">[Visual Tokens × 196]</div>
+                    <div class="seq-separator">+</div>
+                    <div class="seq-part system">[System Prompt]</div>
+                    <div class="seq-separator">+</div>
+                    <div class="seq-part user">[User Question]</div>
+                </div>
+                <h5>Key Insight:</h5>
+                <p>By placing visual tokens at the <em>beginning</em> of the sequence, the LLM can attend to visual information throughout the entire response generation process.</p>
+                <div class="info-stats">
+                    <div class="info-stat"><span class="stat-val">196+N</span><span class="stat-desc">Total sequence length</span></div>
+                    <div class="info-stat"><span class="stat-val">4096D</span><span class="stat-desc">Unified embedding dim</span></div>
+                </div>
+            `,
+            color: '#f59e0b'
+        },
+        'llm': {
+            title: 'Vicuna Language Model',
+            description: `
+                <p>Vicuna is a <strong>fine-tuned version of LLaMA</strong> trained on user-shared conversations from ShareGPT, making it excellent at following instructions.</p>
+                <h5>Architecture Details:</h5>
+                <ul>
+                    <li><strong>Layers:</strong> 32 transformer decoder blocks</li>
+                    <li><strong>Hidden Size:</strong> 4096 dimensions</li>
+                    <li><strong>Attention Heads:</strong> 32</li>
+                    <li><strong>Context Length:</strong> 2048 tokens</li>
+                </ul>
+                <h5>Two-Stage Training:</h5>
+                <ol>
+                    <li><strong>Stage 1 - Alignment:</strong> Only the projection layer is trained on image-caption pairs (frozen LLM)</li>
+                    <li><strong>Stage 2 - Instruction Tuning:</strong> Both projection layer and LLM are fine-tuned on 158K visual instruction examples</li>
+                </ol>
+                <div class="info-stats">
+                    <div class="info-stat"><span class="stat-val">7B/13B</span><span class="stat-desc">Parameters</span></div>
+                    <div class="info-stat"><span class="stat-val">32</span><span class="stat-desc">Transformer layers</span></div>
+                </div>
+            `,
+            color: '#8b5cf6'
+        },
+        'output': {
+            title: 'Autoregressive Text Generation',
+            description: `
+                <p>The LLM generates the response <strong>one token at a time</strong>, with each new token conditioned on all previous tokens AND the visual context.</p>
+                <h5>Generation Process:</h5>
+                <ol>
+                    <li><strong>Forward Pass:</strong> Compute attention over entire sequence (visual + text)</li>
+                    <li><strong>Logit Prediction:</strong> Output layer produces probability distribution over vocabulary (~32K tokens)</li>
+                    <li><strong>Sampling:</strong> Select next token (greedy, top-k, or nucleus sampling)</li>
+                    <li><strong>Append & Repeat:</strong> Add new token to sequence and repeat until [EOS] or max length</li>
+                </ol>
+                <h5>Why Visual Grounding Works:</h5>
+                <p>Because visual tokens are in the sequence, the self-attention mechanism allows <em>every generated word</em> to attend to visual features, maintaining coherence with the image.</p>
+                <div class="info-stats">
+                    <div class="info-stat"><span class="stat-val">~50</span><span class="stat-desc">Tokens/sec (A100)</span></div>
+                    <div class="info-stat"><span class="stat-val">32K</span><span class="stat-desc">Vocabulary size</span></div>
+                </div>
+            `,
+            color: '#10b981'
+        }
+    };
+    
+    // Click handler for layers
+    pipelineLayers.forEach(layer => {
+        const card = layer.querySelector('.layer-card');
+        
+        card.addEventListener('click', () => {
+            const layerName = layer.getAttribute('data-layer');
+            const info = layerInfo[layerName];
+            
+            // Remove active class from all layers
+            pipelineLayers.forEach(l => l.classList.remove('active'));
+            
+            // Add active class to clicked layer
+            layer.classList.add('active');
+            
+            // Update and show detail panel
+            if (detailPanel && info) {
+                detailPanel.classList.add('active');
+                detailPanel.querySelector('.panel-title').textContent = info.title;
+                detailPanel.querySelector('.panel-title').style.color = info.color;
+                detailPanel.querySelector('.panel-content').innerHTML = info.description;
+                
+                // Scroll panel into view
+                detailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        });
+    });
+    
+    // Close panel button
+    const closeBtn = document.querySelector('.panel-close');
+    if (closeBtn && detailPanel) {
+        closeBtn.addEventListener('click', () => {
+            detailPanel.classList.remove('active');
+            pipelineLayers.forEach(l => l.classList.remove('active'));
+        });
+    }
+    
+    // Animate data flow through pipeline
+    animateDataFlow();
+}
+
+function animateDataFlow() {
+    const connectors = document.querySelectorAll('.layer-connector');
+    
+    connectors.forEach((connector, index) => {
+        const dot = connector.querySelector('::after');
+        connector.style.animationDelay = `${index * 0.3}s`;
+    });
+}
+
+// Add additional styles for the panel content
+const demoStyles = document.createElement('style');
+demoStyles.textContent = `
+    .panel-content h5 {
+        font-size: 1rem;
+        color: var(--text-primary);
+        margin: 1.5rem 0 0.75rem;
+    }
+    
+    .panel-content h5:first-child {
+        margin-top: 0;
+    }
+    
+    .panel-content p {
+        color: var(--text-secondary);
+        line-height: 1.7;
+        margin-bottom: 0.75rem;
+    }
+    
+    .panel-content ul, .panel-content ol {
+        color: var(--text-secondary);
+        padding-left: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .panel-content li {
+        margin-bottom: 0.5rem;
+        line-height: 1.6;
+    }
+    
+    .panel-content strong {
+        color: var(--accent-primary);
+    }
+    
+    .panel-content em {
+        color: var(--accent-secondary);
+    }
+    
+    .panel-content code {
+        font-family: 'JetBrains Mono', monospace;
+        background: rgba(99, 102, 241, 0.15);
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        color: var(--accent-primary);
+    }
+    
+    .info-stats {
+        display: flex;
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+        padding: 1rem;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        flex-wrap: wrap;
+    }
+    
+    .info-stat {
+        text-align: center;
+    }
+    
+    .stat-val {
+        display: block;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        line-height: 1.2;
+    }
+    
+    .stat-desc {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+    
+    .formula-box {
+        background: var(--bg-secondary);
+        border-left: 3px solid var(--accent-tertiary);
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    }
+    
+    .formula-box code {
+        font-size: 1.1rem;
+        display: block;
+        margin-bottom: 0.5rem;
+    }
+    
+    .formula-box p {
+        font-size: 0.85rem;
+        margin: 0;
+        color: var(--text-muted);
+    }
+    
+    .sequence-diagram {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        justify-content: center;
+        padding: 1rem;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        margin: 1rem 0;
+    }
+    
+    .seq-part {
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    
+    .seq-part.visual {
+        background: rgba(99, 102, 241, 0.2);
+        border: 1px solid rgba(99, 102, 241, 0.4);
+        color: var(--accent-primary);
+    }
+    
+    .seq-part.system {
+        background: rgba(139, 92, 246, 0.2);
+        border: 1px solid rgba(139, 92, 246, 0.4);
+        color: var(--accent-secondary);
+    }
+    
+    .seq-part.user {
+        background: rgba(16, 185, 129, 0.2);
+        border: 1px solid rgba(16, 185, 129, 0.4);
+        color: var(--accent-success);
+    }
+    
+    .seq-separator {
+        font-size: 1.2rem;
+        color: var(--text-muted);
+    }
+`;
+document.head.appendChild(demoStyles);
+
 console.log('🚀 VLM Evolution Website loaded successfully!');
 console.log('💡 Tip: Try the Konami Code for a surprise! (↑↑↓↓←→←→BA)');
+console.log('🦙 Explore the LLaVA demo to see how vision-language models work!');

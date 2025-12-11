@@ -23,6 +23,7 @@
             <a href="#intro">Intro</a>
             <a href="#timeline">Timeline</a>
             <a href="#models">Models</a>
+            <a href="#demo">Demo</a>
             <a href="#analysis">Analysis</a>
             <a href="#reflection">Reflection</a>
         </div>
@@ -364,6 +365,251 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Interactive LLaVA Demo Section -->
+    <section class="section demo-section" id="demo">
+        <div class="container">
+            <div class="demo-header">
+                <span class="section-label">Interactive Demo</span>
+                <h2 class="section-title">How LLaVA Works</h2>
+                <p class="section-subtitle">Click on each layer to explore the pipeline from image to text</p>
+            </div>
+            
+            <div class="llava-demo">
+                <!-- Input Side -->
+                <div class="demo-input-side">
+                    <div class="demo-image-container">
+                        <div class="demo-image">
+                            <div class="image-placeholder">
+                                <span class="image-icon">🐱</span>
+                                <span class="image-label">Input Image</span>
+                            </div>
+                        </div>
+                        <div class="demo-prompt">
+                            <span class="prompt-label">User Prompt:</span>
+                            <p>"What is this animal doing?"</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pipeline Visualization -->
+                <div class="demo-pipeline">
+                    <!-- Layer 1: Vision Encoder -->
+                    <div class="pipeline-layer" data-layer="vision-encoder">
+                        <div class="layer-connector top"></div>
+                        <div class="layer-card">
+                            <div class="layer-number">1</div>
+                            <div class="layer-icon">👁️</div>
+                            <div class="layer-name">CLIP Vision Encoder</div>
+                            <div class="layer-badge">ViT-L/14</div>
+                        </div>
+                        <div class="layer-connector bottom"></div>
+                        <div class="layer-tooltip">
+                            <h4>Vision Encoder (CLIP ViT-L/14)</h4>
+                            <p>The image is split into <strong>14×14 pixel patches</strong> (196 patches total for 224×224 images). Each patch is embedded into a 1024-dimensional vector.</p>
+                            <div class="tooltip-visual">
+                                <div class="patch-grid">
+                                    <div class="patch"></div><div class="patch"></div><div class="patch"></div><div class="patch"></div>
+                                    <div class="patch"></div><div class="patch"></div><div class="patch"></div><div class="patch"></div>
+                                    <div class="patch"></div><div class="patch"></div><div class="patch"></div><div class="patch"></div>
+                                    <div class="patch"></div><div class="patch"></div><div class="patch"></div><div class="patch"></div>
+                                </div>
+                                <span class="visual-arrow">→</span>
+                                <div class="embedding-visual">
+                                    <div class="embedding-bar"></div>
+                                    <div class="embedding-bar"></div>
+                                    <div class="embedding-bar"></div>
+                                    <span class="embedding-label">196 × 1024D vectors</span>
+                                </div>
+                            </div>
+                            <div class="tooltip-detail">
+                                <span class="detail-label">Output:</span>
+                                <code>Image Features [196, 1024]</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Layer 2: Projection Layer -->
+                    <div class="pipeline-layer" data-layer="projection">
+                        <div class="layer-connector top"></div>
+                        <div class="layer-card">
+                            <div class="layer-number">2</div>
+                            <div class="layer-icon">📐</div>
+                            <div class="layer-name">Linear Projection</div>
+                            <div class="layer-badge">Trainable</div>
+                        </div>
+                        <div class="layer-connector bottom"></div>
+                        <div class="layer-tooltip">
+                            <h4>Linear Projection Layer</h4>
+                            <p>A simple <strong>matrix multiplication</strong> transforms CLIP's visual tokens into the language model's embedding space. This is LLaVA's key architectural simplification!</p>
+                            <div class="tooltip-visual projection-visual">
+                                <div class="matrix-box">
+                                    <span class="matrix-label">Visual Tokens</span>
+                                    <span class="matrix-dim">[196, 1024]</span>
+                                </div>
+                                <span class="visual-operator">×</span>
+                                <div class="matrix-box highlight">
+                                    <span class="matrix-label">W<sub>proj</sub></span>
+                                    <span class="matrix-dim">[1024, 4096]</span>
+                                </div>
+                                <span class="visual-operator">=</span>
+                                <div class="matrix-box">
+                                    <span class="matrix-label">LLM Tokens</span>
+                                    <span class="matrix-dim">[196, 4096]</span>
+                                </div>
+                            </div>
+                            <div class="tooltip-detail">
+                                <span class="detail-label">Output:</span>
+                                <code>Language-aligned Visual Tokens [196, 4096]</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Layer 3: Token Concatenation -->
+                    <div class="pipeline-layer" data-layer="concatenation">
+                        <div class="layer-connector top"></div>
+                        <div class="layer-card">
+                            <div class="layer-number">3</div>
+                            <div class="layer-icon">🔗</div>
+                            <div class="layer-name">Token Concatenation</div>
+                            <div class="layer-badge">Merge</div>
+                        </div>
+                        <div class="layer-connector bottom"></div>
+                        <div class="layer-tooltip">
+                            <h4>Token Concatenation</h4>
+                            <p>The projected visual tokens are <strong>concatenated</strong> with the tokenized text prompt to form a unified sequence for the LLM.</p>
+                            <div class="tooltip-visual concat-visual">
+                                <div class="token-sequence">
+                                    <div class="token-group visual-tokens">
+                                        <span class="token v-tok"></span>
+                                        <span class="token v-tok"></span>
+                                        <span class="token v-tok"></span>
+                                        <span class="token-ellipsis">...</span>
+                                        <span class="group-label">196 visual tokens</span>
+                                    </div>
+                                    <span class="concat-plus">+</span>
+                                    <div class="token-group text-tokens">
+                                        <span class="token t-tok">What</span>
+                                        <span class="token t-tok">is</span>
+                                        <span class="token t-tok">this</span>
+                                        <span class="token-ellipsis">...</span>
+                                        <span class="group-label">text tokens</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="tooltip-detail">
+                                <span class="detail-label">Output:</span>
+                                <code>Combined Sequence [196 + N<sub>text</sub>, 4096]</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Layer 4: LLM (Vicuna) -->
+                    <div class="pipeline-layer" data-layer="llm">
+                        <div class="layer-connector top"></div>
+                        <div class="layer-card large">
+                            <div class="layer-number">4</div>
+                            <div class="layer-icon">🦙</div>
+                            <div class="layer-name">Vicuna LLM</div>
+                            <div class="layer-badge">7B/13B Parameters</div>
+                            <div class="layer-sublabel">32 Transformer Layers</div>
+                        </div>
+                        <div class="layer-connector bottom"></div>
+                        <div class="layer-tooltip">
+                            <h4>Vicuna Language Model</h4>
+                            <p>The combined sequence passes through <strong>32 transformer layers</strong> with self-attention, allowing the model to reason about relationships between visual and textual tokens.</p>
+                            <div class="tooltip-visual llm-visual">
+                                <div class="transformer-stack">
+                                    <div class="transformer-layer">
+                                        <span>Self-Attention</span>
+                                        <span>FFN</span>
+                                    </div>
+                                    <div class="transformer-layer">
+                                        <span>Self-Attention</span>
+                                        <span>FFN</span>
+                                    </div>
+                                    <div class="transformer-ellipsis">× 32 layers</div>
+                                </div>
+                            </div>
+                            <div class="tooltip-detail">
+                                <span class="detail-label">Process:</span>
+                                <code>Autoregressive token generation</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Layer 5: Output Generation -->
+                    <div class="pipeline-layer" data-layer="output">
+                        <div class="layer-connector top"></div>
+                        <div class="layer-card">
+                            <div class="layer-number">5</div>
+                            <div class="layer-icon">💬</div>
+                            <div class="layer-name">Text Generation</div>
+                            <div class="layer-badge">Output</div>
+                        </div>
+                        <div class="layer-tooltip">
+                            <h4>Autoregressive Text Generation</h4>
+                            <p>The LLM generates text <strong>one token at a time</strong>, each new token conditioned on the visual context and all previous tokens.</p>
+                            <div class="tooltip-visual output-visual">
+                                <div class="generation-sequence">
+                                    <span class="gen-token generated">The</span>
+                                    <span class="gen-token generated">cat</span>
+                                    <span class="gen-token generated">is</span>
+                                    <span class="gen-token generated">sitting</span>
+                                    <span class="gen-token generating">on</span>
+                                    <span class="gen-token pending">...</span>
+                                </div>
+                            </div>
+                            <div class="tooltip-detail">
+                                <span class="detail-label">Output:</span>
+                                <code>Natural language response</code>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Output Side -->
+                <div class="demo-output-side">
+                    <div class="demo-response-container">
+                        <div class="response-header">
+                            <span class="response-icon">🤖</span>
+                            <span class="response-label">LLaVA Response</span>
+                        </div>
+                        <div class="response-content">
+                            <p class="response-text">"The cat is sitting on a wooden table, looking directly at the camera with its bright green eyes. It appears to be a domestic shorthair with tabby markings."</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Layer Detail Panel -->
+            <div class="layer-detail-panel" id="layerDetailPanel">
+                <div class="panel-header">
+                    <h3 class="panel-title">Select a layer to explore</h3>
+                    <button class="panel-close" aria-label="Close panel">×</button>
+                </div>
+                <div class="panel-content">
+                    <p class="panel-hint">Click on any layer in the pipeline above to see detailed information about how it processes data.</p>
+                </div>
+            </div>
+
+            <!-- Data Flow Animation -->
+            <div class="data-flow-legend">
+                <div class="legend-item">
+                    <span class="legend-color visual"></span>
+                    <span class="legend-label">Visual Data</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color text"></span>
+                    <span class="legend-label">Text Data</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color merged"></span>
+                    <span class="legend-label">Merged Representation</span>
+                </div>
             </div>
         </div>
     </section>
